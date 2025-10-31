@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Leaderboard</title>
+<style>
+body{background:#111;color:white;font-family:Arial;text-align:center;padding-top:40px;}
+#leaderboard{width:300px;margin:0 auto;background:#222;border-radius:12px;padding:20px;}
+li{list-style:none;text-align:left;margin:5px 0;}
+a{color:#0af;}
+</style>
+</head>
+<body>
+<h1>🏆 Global Top 5 🏆</h1>
+<div id="leaderboard"><ol id="list"></ol></div>
+<a href="index.html">⬅ Back to Game</a>
+
+<script src="https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js"></script>
+<script>
+const firebaseConfig={apiKey:"YOUR_API_KEY",authDomain:"YOUR_PROJECT.firebaseapp.com",projectId:"YOUR_PROJECT_ID"};
+firebase.initializeApp(firebaseConfig);
+const db=firebase.firestore();
+const list=document.getElementById('list');
+
+async function loadLeaderboard(){
+  const snap=await db.collection("scores").orderBy("best","asc").limit(5).get();
+  list.innerHTML="";
+  snap.forEach((doc,i)=>{
+    const d=doc.data();
+    list.innerHTML+=`<li>${i+1}. ${d.username} - ${d.best} ms</li>`;
+  });
+}
+loadLeaderboard();
+</script>
+</body>
+</html>
