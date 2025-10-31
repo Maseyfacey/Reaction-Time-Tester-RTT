@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reaction Time Game</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    background: #222;
+    color: white;
+    text-align: center;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    height: 100vh;
+  }
+
+  #loginArea, #gameArea {
+    margin: 20px auto;
+    width: 300px;
+    background: #333;
+    border-radius: 10px;
+    padding: 20px;
+  }
+
+  input {
+    margin: 5px;
+    padding: 8px;
+    width: 90%;
+    border-radius: 5px;
+    border: none;
+  }
+
+  button {
+    margin-top: 10px;
+    padding: 8px 15px;
+    border: none;
+    border-radius: 6px;
+    background: #06c;
+    color: white;
+    cursor: pointer;
+  }
+
+  #gameBox {
+    background-color: crimson;
+    border-radius: 12px;
+    margin-top: 10px;
+    height: 150px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 18px;
+    transition: background-color 0.3s;
+  }
+
+  a {
+    color: #0af;
+  }
+</style>
+</head>
+<body>
+  <h1>⚡ Reaction Time Game ⚡</h1>
+
+  <!-- LOGIN AREA -->
+  <div id="loginArea">
+    <h2>Login / Sign Up</h2>
+    <input type="email" id="email" placeholder="Email"><br>
+    <input type="password" id="password" placeholder="Password"><br>
+    <button id="loginBtn">Login</button>
+    <button id="signupBtn">Sign Up</button>
+    <p id="statusMsg"></p>
+  </div>
+
+  <!-- GAME AREA -->
+  <div id="gameArea" style="display:none;">
+    <h2 id="userInfo"></h2>
+    <div id="gameBox">Click to Start</div>
+    <p id="result"></p>
+    <a href="leaderboard.html">🏆 View Leaderboard</a><br>
+    <button id="logoutBtn">Logout</button>
+  </div>
+
+<script src="https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js"></script>
+<script>
+  // 🔥 Replace with your Firebase config
+  const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT.firebaseapp.com",
+    projectId: "YOUR_PROJECT_ID",
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.firestore();
+
+  const loginArea = document.getElementById('loginArea');
+  const gameArea = document.getElementById('gameArea');
+  const loginBtn = document.getElementById('loginBtn');
+  const signupBtn = document.getElementById('signupBtn');
+  const logoutBtn = document.getElementById('logoutBtn');
+  const statusMsg = document.getElementById('statusMsg');
+  const gameBox = document.getElementById('gameBox');
+  const result = document.getElementById('result');
+  const userInfo = document.getElementById('userInfo');
+
+  let user, startTime, timeout, waiting = false;
+
+  // 🧩 AUTH
+  loginBtn.onclick = () => {
+    const email = email.value, pass = password.value;
+    auth.signInWithEmailAndPassword(email, pass)
+      .catch(err => statusMsg.textContent = err.message);
+  };
+
+  signupBtn.onclick = () => {
+    const email = email.value, pass = password.value;
+    auth.createUserWithEmailAndPassword(email, pass)
+      .catch(err => statusMsg.textContent = err.message);
+  };
+
+  logoutBtn.onclick = () => auth.signOut();
+
+  auth.onAuthStateChanged(async (u) => {
+    if (u) {
+      user = u;
+      loginArea.style.display = "none";
+      gameArea.style.display = "block";
+      userInfo.textContent = `Welcome, ${u.email}`;
+    } else {
+      loginArea.style.display = "block";
+      gameArea.style.display = "none";
+    }
+  });
+
+  // 🕹️ GAME LOGIC
+  function startGame() {
+    gameBox.textContent = "Wait for green...";
+    gameBox.style.backgroundColor = "crimson";
+    waiting = true;
+    timeout = setTimeout(() => {
+      gameBox.style.backgroundColor = "limegreen";
+      gameBox.textContent = "CLICK!";
+      startTime = Date.now();
+      waiting = false;
+    }, Math.random() * 3000 + 1000);
+  }
+
+  gameBox.addEventListener('click', async () => {
+    if (!startTime && !waiting) {
+      startGame();
+    } else if (waiting) {
+      clearTimeout(timeout);
+      gameBox.textContent = "Too soon! Try again.";
+      gameBox.style.backgroundColor = "crimson";
+      waiting = false;
+    } else if (startTime) {
+      const time = Date.now() - startTime;
+      result.textContent = `⏱️ ${time} ms!`;
+
+      // 🧠 Save only best score
+      const ref = db.collection("scores").doc(user.uid);
+      const doc = await ref.get();
+      if (!doc.exists || time < doc.data().best) {
+        await ref.set({
+          name: user.email.split('@')[0],
+          best: time,
+          timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        result.textContent += " (New Personal Best!)";
+      }
+
+      gameBox.textContent = "Click to Start";
+      gameBox.style.backgroundColor = "crimson";
+      startTime = null;
+    }
+  });
+</script>
+</body>
+</html>
