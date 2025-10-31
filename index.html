@@ -1,184 +1,158 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Reaction Time Game</title>
 <style>
-  body {
-    font-family: Arial, sans-serif;
-    background: #222;
-    color: white;
-    text-align: center;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    height: 100vh;
-  }
-
-  #loginArea, #gameArea {
-    margin: 20px auto;
-    width: 300px;
-    background: #333;
-    border-radius: 10px;
-    padding: 20px;
-  }
-
-  input {
-    margin: 5px;
-    padding: 8px;
-    width: 90%;
-    border-radius: 5px;
-    border: none;
-  }
-
-  button {
-    margin-top: 10px;
-    padding: 8px 15px;
-    border: none;
-    border-radius: 6px;
-    background: #06c;
-    color: white;
-    cursor: pointer;
-  }
-
-  #gameBox {
-    background-color: crimson;
-    border-radius: 12px;
-    margin-top: 10px;
-    height: 150px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    font-size: 18px;
-    transition: background-color 0.3s;
-  }
-
-  a {
-    color: #0af;
-  }
+body {
+  background:#222; color:white; text-align:center;
+  font-family:Arial; display:flex; flex-direction:column;
+  justify-content:center; height:100vh; margin:0;
+}
+#auth, #game {
+  width:300px; margin:0 auto; background:#333;
+  border-radius:10px; padding:20px;
+}
+input { margin:5px; padding:8px; width:90%; border:none; border-radius:5px; }
+button { margin-top:10px; padding:8px 15px; border:none; border-radius:6px;
+  background:#06c; color:white; cursor:pointer; }
+#gameBox {
+  background:crimson; border-radius:12px; margin-top:10px;
+  height:150px; display:flex; align-items:center; justify-content:center;
+  cursor:pointer; font-size:18px; transition:background-color .3s;
+}
+a { color:#0af; }
 </style>
 </head>
 <body>
-  <h1>⚡ Reaction Time Game ⚡</h1>
+<h1>⚡ Reaction Time Game ⚡</h1>
 
-  <!-- LOGIN AREA -->
-  <div id="loginArea">
-    <h2>Login / Sign Up</h2>
-    <input type="email" id="email" placeholder="Email"><br>
-    <input type="password" id="password" placeholder="Password"><br>
-    <button id="loginBtn">Login</button>
-    <button id="signupBtn">Sign Up</button>
-    <p id="statusMsg"></p>
-  </div>
+<div id="auth">
+  <h2>Login / Sign Up</h2>
+  <input type="text" id="username" placeholder="Username"><br>
+  <input type="password" id="password" placeholder="Password"><br>
+  <button id="loginBtn">Login</button>
+  <button id="signupBtn">Sign Up</button>
+  <p id="authMsg"></p>
+</div>
 
-  <!-- GAME AREA -->
-  <div id="gameArea" style="display:none;">
-    <h2 id="userInfo"></h2>
-    <div id="gameBox">Click to Start</div>
-    <p id="result"></p>
-    <a href="leaderboard.html">🏆 View Leaderboard</a><br>
-    <button id="logoutBtn">Logout</button>
-  </div>
+<div id="game" style="display:none;">
+  <h2 id="userLabel"></h2>
+  <div id="gameBox">Click to Start</div>
+  <p id="result"></p>
+  <a href="leaderboard.html">🏆 View Leaderboard</a><br>
+  <button id="logoutBtn">Logout</button>
+</div>
 
 <script src="https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js"></script>
 <script>
-  // 🔥 Replace with your Firebase config
-  const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_PROJECT.firebaseapp.com",
-    projectId: "YOUR_PROJECT_ID",
-  };
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
 
-  firebase.initializeApp(firebaseConfig);
-  const auth = firebase.auth();
-  const db = firebase.firestore();
+// --- Elements ---
+const authDiv = document.getElementById('auth');
+const gameDiv = document.getElementById('game');
+const authMsg = document.getElementById('authMsg');
+const userLabel = document.getElementById('userLabel');
+const gameBox = document.getElementById('gameBox');
+const result = document.getElementById('result');
 
-  const loginArea = document.getElementById('loginArea');
-  const gameArea = document.getElementById('gameArea');
-  const loginBtn = document.getElementById('loginBtn');
-  const signupBtn = document.getElementById('signupBtn');
-  const logoutBtn = document.getElementById('logoutBtn');
-  const statusMsg = document.getElementById('statusMsg');
-  const gameBox = document.getElementById('gameBox');
-  const result = document.getElementById('result');
-  const userInfo = document.getElementById('userInfo');
+// --- Simple hash helper ---
+async function hashPassword(pw) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pw));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
 
-  let user, startTime, timeout, waiting = false;
+// --- Auth ---
+async function signup() {
+  const user = username.value.trim();
+  const pass = password.value;
+  if (!user || !pass) return authMsg.textContent = "Fill in both fields.";
+  const snap = await db.collection('users').doc(user).get();
+  if (snap.exists) return authMsg.textContent = "Username already taken.";
+  const hash = await hashPassword(pass);
+  await db.collection('users').doc(user).set({ passwordHash: hash });
+  localStorage.setItem('user', user);
+  showGame(user);
+}
 
-  // 🧩 AUTH
-  loginBtn.onclick = () => {
-    const email = email.value, pass = password.value;
-    auth.signInWithEmailAndPassword(email, pass)
-      .catch(err => statusMsg.textContent = err.message);
-  };
+async function login() {
+  const user = username.value.trim();
+  const pass = password.value;
+  if (!user || !pass) return authMsg.textContent = "Fill in both fields.";
+  const doc = await db.collection('users').doc(user).get();
+  if (!doc.exists) return authMsg.textContent = "No such user.";
+  const hash = await hashPassword(pass);
+  if (doc.data().passwordHash !== hash) return authMsg.textContent = "Wrong password.";
+  localStorage.setItem('user', user);
+  showGame(user);
+}
 
-  signupBtn.onclick = () => {
-    const email = email.value, pass = password.value;
-    auth.createUserWithEmailAndPassword(email, pass)
-      .catch(err => statusMsg.textContent = err.message);
-  };
+function logout() {
+  localStorage.removeItem('user');
+  gameDiv.style.display = 'none';
+  authDiv.style.display = 'block';
+}
 
-  logoutBtn.onclick = () => auth.signOut();
+// --- Show Game ---
+function showGame(user) {
+  userLabel.textContent = `Welcome, ${user}`;
+  authDiv.style.display = 'none';
+  gameDiv.style.display = 'block';
+}
 
-  auth.onAuthStateChanged(async (u) => {
-    if (u) {
-      user = u;
-      loginArea.style.display = "none";
-      gameArea.style.display = "block";
-      userInfo.textContent = `Welcome, ${u.email}`;
-    } else {
-      loginArea.style.display = "block";
-      gameArea.style.display = "none";
+// --- Game logic ---
+let waiting=false,startTime,timeout;
+function startGame(){
+  gameBox.textContent="Wait for green...";
+  gameBox.style.backgroundColor="crimson";
+  waiting=true;
+  timeout=setTimeout(()=>{
+    gameBox.style.backgroundColor="limegreen";
+    gameBox.textContent="CLICK!";
+    startTime=Date.now();
+    waiting=false;
+  },Math.random()*3000+1000);
+}
+
+gameBox.onclick=async()=>{
+  const user=localStorage.getItem('user');
+  if(!startTime&&!waiting){startGame();}
+  else if(waiting){
+    clearTimeout(timeout);
+    gameBox.textContent="Too soon! Try again.";
+    gameBox.style.backgroundColor="crimson";
+    waiting=false;
+  }else if(startTime){
+    const time=Date.now()-startTime;
+    result.textContent=`⏱️ ${time} ms!`;
+    const ref=db.collection('scores').doc(user);
+    const doc=await ref.get();
+    if(!doc.exists||time<doc.data().best){
+      await ref.set({username:user,best:time});
+      result.textContent+=" (New Personal Best!)";
     }
-  });
-
-  // 🕹️ GAME LOGIC
-  function startGame() {
-    gameBox.textContent = "Wait for green...";
-    gameBox.style.backgroundColor = "crimson";
-    waiting = true;
-    timeout = setTimeout(() => {
-      gameBox.style.backgroundColor = "limegreen";
-      gameBox.textContent = "CLICK!";
-      startTime = Date.now();
-      waiting = false;
-    }, Math.random() * 3000 + 1000);
+    gameBox.textContent="Click to Start";
+    gameBox.style.backgroundColor="crimson";
+    startTime=null;
   }
+};
 
-  gameBox.addEventListener('click', async () => {
-    if (!startTime && !waiting) {
-      startGame();
-    } else if (waiting) {
-      clearTimeout(timeout);
-      gameBox.textContent = "Too soon! Try again.";
-      gameBox.style.backgroundColor = "crimson";
-      waiting = false;
-    } else if (startTime) {
-      const time = Date.now() - startTime;
-      result.textContent = `⏱️ ${time} ms!`;
+// --- Events ---
+signupBtn.onclick=signup;
+loginBtn.onclick=login;
+logoutBtn.onclick=logout;
 
-      // 🧠 Save only best score
-      const ref = db.collection("scores").doc(user.uid);
-      const doc = await ref.get();
-      if (!doc.exists || time < doc.data().best) {
-        await ref.set({
-          name: user.email.split('@')[0],
-          best: time,
-          timestamp: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        result.textContent += " (New Personal Best!)";
-      }
-
-      gameBox.textContent = "Click to Start";
-      gameBox.style.backgroundColor = "crimson";
-      startTime = null;
-    }
-  });
+// Auto-login if remembered
+const saved=localStorage.getItem('user');
+if(saved) showGame(saved);
 </script>
 </body>
 </html>
